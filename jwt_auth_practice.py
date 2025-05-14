@@ -50,6 +50,15 @@ def get_current_user(token: str = Depends(oauth2_scheme)):
         )
     return payload["sub"]
 
+def get_current_admin(token: str = Depends(oauth2_scheme)):
+    payload = decode_access_token(token)
+    if not payload or "sub" not in payload or payload.get("role") != "admin":
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Admin privileges required",
+        )
+    return payload["sub"]
+
 # Public endpoints remain unchanged.
 @app.get("/")
 def index():
@@ -65,15 +74,16 @@ def login(form_data: OAuth2PasswordRequestForm = Depends()):
     username = form_data.username
     password = form_data.password
 
-    # Validate the user credentials.
     if username not in VALID_USERS or VALID_USERS[username] != password:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Incorrect username or password",
         )
     
-    # Generate a token payload. Here, "sub" holds the username.
-    access_token = create_access_token(data={"sub": username})
+    # Set a role based on username (or from your database)
+    role = "admin" if username == "admin" else "user"
+    
+    access_token = create_access_token(data={"sub": username, "role": role})
     return {"access_token": access_token, "token_type": "bearer"}
 
 # Protected endpoint: accessible only with a valid JWT.
@@ -83,6 +93,12 @@ def secure_data(current_user: str = Depends(get_current_user)):
 
 if __name__ == "__main__":
     uvicorn.run(app, host="127.0.0.1", port=8000)
+
+
+@app.get("/admin-data")
+def admin_data(current_admin: str = Depends(get_current_admin)):
+    return {"message": f"Hello {current_admin}, you have admin access!"}
+
 
 
 
